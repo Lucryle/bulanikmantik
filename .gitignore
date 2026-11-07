@@ -1,0 +1,30 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- Environments ---
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# --- Large raw experiment outputs (summary tables/figures ARE tracked) ---
+results/raw/*
+!results/raw/.gitkeep
+
+# --- Reference paper PDF (copyrighted; link is in references/README.md) ---
+references/*.pdf
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# --- Submission archive ---
+*.zip
