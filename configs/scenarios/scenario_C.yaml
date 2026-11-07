@@ -1,0 +1,11 @@
+# Scenario C — motion-mode change: uniform motion then sudden direction changes
+# (paper: "C - movement pattern change").                    [A12]
+name: C
+target:
+  motion: random_turns
+  speed_range: [1.0, 1.5]   # m/s
+  uniform_phase_s: 10.0     # first 10 s straight, then random turns
+  turn_interval_s: [2.0, 5.0]
+  turn_angle_deg: [60.0, 150.0]
+detector:
+  p_miss: 0.05

@@ -1,0 +1,49 @@
+# Default simulation parameters.
+# Every value NOT given in the reference paper is an assumption and is
+# justified in docs/ASSUMPTIONS.md (IDs in brackets, e.g. [A3]).
+
+sim:
+  dt: 0.05              # s, 20 Hz control loop                       [A1]
+  duration: 40.0        # s, length of one trial                      [A1]
+
+uav:                    # planar kinematics at constant altitude      [A2]
+  altitude: 10.0        # m
+  v_max: 2.0            # m/s  (paper: kv = v / 2  -> v in [-2, 2])
+  yaw_rate_max: 1.0471975511965976   # rad/s = pi/3 (paper: kyaw = yaw / (pi/3)) [A3]
+  tau_v: 0.3            # s, first-order speed response lag
+  tau_r: 0.2            # s, first-order yaw-rate response lag
+
+camera:                 # pinhole camera                              [A4]
+  width: 1920           # px (paper, Table 1)
+  height: 1080          # px (paper, Table 1)
+  hfov_deg: 84.0        # DJI Phantom 4 Pro horizontal FOV
+  pitch_deg: 90.0       # 90 = looking straight down
+
+detector:               # simulated detector replacing the ViT        [A5]
+  sigma_px: 5.0         # px, Gaussian pixel noise
+  p_miss: 0.02          # probability of a missed detection
+  p_false_positive: 0.0 # probability of a random false detection
+  latency_s: 0.1        # s, edge-computing perception latency        [A6]
+
+particle_filter:        #                                             [A7]
+  n_particles: 500
+  resample_threshold: 0.5   # resample when ESS < threshold * N
+  resampling: systematic
+  process_noise_acc: 0.5    # m/s^2, constant-velocity model noise
+  init_area: [-20.0, 20.0]  # m, uniform initialisation (square area)
+
+wind:                   # residual drift + OU gusts                   [A8]
+  speed: 0.0            # m/s, nominal max wind speed W
+  direction_deg: 0.0
+  alpha: 0.04           # residual drift fraction (attitude controller rejects the rest)
+  gust_sigma_factor: 0.02   # OU sigma = factor * W
+  gust_tau: 2.0             # s, OU correlation time
+
+metrics:                #                                             [A9]
+  capture_radius: 0.5   # m
+  capture_hold: 1.0     # s, must stay inside radius this long
+
+seeds:                  #                                             [A10]
+  tuning: [1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009]
+  test_start: 0         # test seeds = test_start .. test_start + n_test - 1
+  n_test: 30

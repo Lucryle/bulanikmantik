@@ -1,0 +1,12 @@
+# Benchmark membership functions for Δy, as printed in the reference paper
+# (Li et al. 2024, "Results and discussion" text, p. 10).
+# Triangular MF (a, b, c) on the paper's 0–28 scale.
+# Normalised to [-1, 1] in code with k = (u - 14) / 14   (see ASSUMPTIONS [A11]).
+name: benchmark
+scale: [0, 28]
+terms:
+  NB: [0, 5, 10]
+  NS: [3, 8, 13]
+  MM: [8, 13, 18]
+  PS: [13, 18, 23]
+  PB: [18, 23, 28]

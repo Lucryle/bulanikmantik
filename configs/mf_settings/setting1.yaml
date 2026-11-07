@@ -1,0 +1,11 @@
+# "Parameter setting 1" membership functions for Δy, as printed in the
+# reference paper (Li et al. 2024, p. 10). Triangular (a, b, c), 0–28 scale.
+# Note: PB upper bound 29 exceeds the 0–28 scale in the paper.
+name: setting1
+scale: [0, 28]
+terms:
+  NB: [0, 6, 12]
+  NS: [4, 9, 14]
+  MM: [9, 14, 19]
+  PS: [14, 19, 24]
+  PB: [19, 24, 29]

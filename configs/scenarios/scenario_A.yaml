@@ -1,0 +1,8 @@
+# Scenario A — fast target movement (paper: "A - fast target movement").
+# Values override configs/default.yaml.                     [A12]
+name: A
+target:
+  motion: fast_linear       # straight line with occasional gentle turns
+  speed_range: [1.6, 2.0]   # m/s = 0.8–1.0 x v_max (must not exceed v_max)
+detector:
+  p_miss: 0.02

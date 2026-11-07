@@ -1,0 +1,15 @@
+# Scenario B — complex environment: obstacles + illumination change
+# (paper: "B - complex environment change").                 [A12]
+name: B
+target:
+  motion: sinusoidal
+  speed_range: [0.8, 1.2]   # m/s
+detector:
+  p_miss: 0.20
+  p_false_positive: 0.03
+  occlusion_zones:          # target invisible inside these circles: [x, y, radius] (m)
+    - [8.0, 4.0, 2.0]
+    - [-6.0, -10.0, 2.5]
+  illumination:             # sigma_px grows linearly over the trial
+    sigma_px_start: 5.0
+    sigma_px_end: 15.0

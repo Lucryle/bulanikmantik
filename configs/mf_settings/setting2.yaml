@@ -1,0 +1,11 @@
+# "Parameter setting 2" membership functions for Δy, as printed in the
+# reference paper (Li et al. 2024, p. 10). Triangular (a, b, c), 0–28 scale.
+# Note: PB (17, 22, 28) is asymmetric, unlike the other terms.
+name: setting2
+scale: [0, 28]
+terms:
+  NB: [0, 4, 10]
+  NS: [3, 7, 12]
+  MM: [7, 12, 17]
+  PS: [12, 17, 22]
+  PB: [17, 22, 28]
