@@ -25,12 +25,24 @@ detector:               # simulated detector replacing the ViT        [A5]
   p_false_positive: 0.0 # probability of a random false detection
   latency_s: 0.1        # s, edge-computing perception latency        [A6]
 
+target:                 # default target; scenarios override this     [A12]
+  motion: linear
+  speed_range: [1.0, 1.0]   # m/s
+  init_offset_max: [3.5, 6.0]   # m, start inside the first image (|forward|, |left|)
+  init_min_distance: 2.0        # m
+
 particle_filter:        #                                             [A7]
+  enabled: true         # false = use the latest raw detection instead (ablation)
   n_particles: 500
   resample_threshold: 0.5   # resample when ESS < threshold * N
   resampling: systematic
-  process_noise_acc: 0.5    # m/s^2, constant-velocity model noise
+  process_noise_acc: 1.0    # m/s^2, constant-velocity model noise
+  meas_sigma_m: 0.2         # m, likelihood std on the ground (pixel noise + latency + pose error)
   init_area: [-20.0, 20.0]  # m, uniform initialisation (square area)
+  outlier_prob: 0.05        # uniform outlier term in the likelihood (false positives)
+  inject_frac: 0.05         # fraction re-drawn around each measurement (recovery)
+  jitter_pos: 0.05          # m, jitter added after resampling (regularised PF)
+  jitter_vel: 0.2           # m/s
 
 wind:                   # residual drift + OU gusts                   [A8]
   speed: 0.0            # m/s, nominal max wind speed W

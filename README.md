@@ -20,6 +20,16 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+## Usage
+```bash
+# unit tests
+python -m pytest
+# membership functions and controller input-output curves -> results/figures/
+python experiments/baseline/plot_control_curves.py
+# one closed-loop tracking trial (scenario A/B/C, controller, MF setting, seed)
+python experiments/run_single_trial.py --scenario C --controller it2_paper --mf benchmark --seed 0
+```
+
 ## Repository Layout
 | Path | Contents |
 |---|---|

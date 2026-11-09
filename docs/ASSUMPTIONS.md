@@ -24,14 +24,14 @@ Legend: **Paper** = value stated in the paper · **Assumed** = our choice.
 | A4 | Camera | Pinhole camera, 1920×1080, horizontal FOV 84°, pointing straight down | Resolution from the paper (Table 1); FOV assumed | 84° is the DJI Phantom 4 Pro camera's FOV (the paper's UAV, Table 1). A straight-down camera makes the pixel ↔ ground mapping linear and easy to explain. |
 | A5 | Target detector | The Vision Transformer is replaced by a simulated detector: true pixel position + N(0, σ_px²), σ_px = 5 px, miss probability p_miss, false-positive probability p_fp | Assumed | The paper gives no ViT architecture, training data or accuracy. The fuzzy-logic contribution sits in the control layer, and the course focuses on fuzzy logic. |
 | A6 | Edge-computing latency | Fixed perception delay of 0.1 s | Assumed | The paper reports 3 edge devices (Table 1) but no latency figures. |
-| A7 | Particle filter | State [x, y, vx, vy]; constant-velocity motion model; Gaussian likelihood; N = 500; systematic resampling when ESS < N/2; uniform initialisation over the flight area | The paper gives the steps (Eqs. 18–20): uniform init, motion update, weighting, normalisation, resampling, weighted mean. N, the noise levels and the resampling scheme are assumed | These are standard choices from Arulampalam *et al.* (2002). |
+| A7 | Particle filter | State [x, y, vx, vy]; constant-velocity motion model (acceleration noise 1 m/s²); Gaussian likelihood on the ground plane with σ = 0.2 m plus a 5 % uniform outlier term; N = 500; systematic resampling when ESS < N/2 followed by a small jitter (regularised PF); 5 % of the particles re-drawn around each new measurement; uniform initialisation over a 40 m × 40 m area; delayed detections compared with each particle's position at capture time (x − v·latency) | The paper gives the steps (Eqs. 18–20): uniform init, motion update, weighting, normalisation, resampling, weighted mean. Everything else is assumed | Standard choices (Arulampalam *et al.*, 2002). σ = 0.2 m is larger than the pure pixel noise (5 px ≈ 0.05 m) because it also covers latency and pose errors. Without the jitter and the re-drawn particles the filter often locked onto a wrong velocity and never recovered (checked in development). |
 
 ## Environment
 
 | ID | Item | Value | Source | Justification |
 |---|---|---|---|---|
 | A8 | Wind | Disturbance d(t) = α·W·ŵ + OU gust; α = 0.04, gust σ = 0.02·W, τ = 2 s; W ∈ {4.9, 9.6, 12.1} m/s | W values from the paper (Table 2); the model is assumed | With v_max = 2 m/s, applying 12.1 m/s wind directly would blow the UAV away. A real UAV's inner attitude controller rejects most of the wind, so only a residual fraction α drifts the vehicle. **This is a key limitation.** |
-| A12 | Scenario definitions | See `configs/scenarios/` | The paper only names the scenarios (A fast target, B obstacles and lighting changes, C motion-mode change); the numbers are assumed | Scenario A keeps the target speed ≤ v_max, otherwise tracking is physically impossible. |
+| A12 | Scenario definitions | See `configs/scenarios/`. The target starts at a random point inside the first camera image, at least 2 m from the UAV | The paper only names the scenarios (A fast target, B obstacles and lighting changes, C motion-mode change); the numbers are assumed | Scenario A keeps the target speed ≤ v_max, otherwise tracking is physically impossible. |
 
 ## Fuzzy controller
 
@@ -42,6 +42,8 @@ Legend: **Paper** = value stated in the paper · **Assumed** = our choice.
 | A14 | FOU (type-2 uncertainty) | UMF = (a−δ, b, c+δ), LMF = (a+δ, b, c−δ) with height h_L = 0.8; δ is swept in the sensitivity study | Assumed | The paper gives no FOU parameters. |
 | A15 | Inference / type reduction | min t-norm (equivalent to the firing level for a single input); Karnik–Mendel centre-of-sets type reduction; y = (y_l + y_r)/2 | The paper says only "central set defuzzification" (p. 5); the rest is assumed | KM centre-of-sets is the standard IT2 type reducer (Karnik & Mendel, 2001). |
 | A16 | Output term centres | LB [−1, −0.9], LS [−0.55, −0.45], ZO [−0.05, 0.05], RS [0.45, 0.55], RB [0.9, 1] (normalised) | Assumed | The paper gives no output MFs. |
+| A19 | Outer terms | NB and PB are shoulder MFs: membership stays at its maximum for every input beyond the peak | Assumed | With plain triangles, NB (0, 5, 10) maps to (−1, −0.64, −0.29), so an error of exactly −1 would fire no rule at all. Shoulders are the usual fix. |
+| A20 | Offset at zero error (finding, not a choice) | Benchmark: y(0) ≈ +0.10, Setting 2: y(0) ≈ +0.20, Setting 1: y(0) = 0 | Follows from the paper's MFs + A11 | The MM peak is at 13 (benchmark) and 12 (setting 2) instead of the middle of the scale (14), so the controller is not symmetric. In closed loop this leaves a steady pixel offset. Setting 1 (MM peak at 14) is the only symmetric set. See `results/figures/control_curves.png`. |
 | A17 | Sign convention | Δx > 0 → target to the right → yaw right. Δy < 0 → move forward (paper p. 5: "when Δy is negative, the UAV will move forward") | Paper (rule semantics) | Defined in one place in the code and checked by a unit test. |
 
 ## Evaluation
