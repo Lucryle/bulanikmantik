@@ -1,0 +1,15 @@
+# Reference-paper IT2 FLC: single input, 5 rules (NB->LB ... PB->RB).
+# Used for both the yaw (input Δx) and the speed (input Δy) controller.
+type: it2_flc
+fou_delta: 0.05          # FOU half-width on the normalised scale        [A14]
+lower_height: 0.8        # height of the lower MF                        [A14]
+mf_center: 14.0          # paper scale 0–28 -> [-1, 1]: k = (u - 14)/14  [A11]
+type_reduction: km       # km = Karnik–Mendel, nt = Nie–Tan              [A15]
+input_gain: 1.0          # scale factor on the normalised error (tuned later)
+output_gain: 1.0         # scale factor on the normalised output (tuned later)
+output_centers:          # [c_left, c_right] per output term, normalised [A16]
+  - [-1.00, -0.90]       # LB / GB
+  - [-0.55, -0.45]       # LS / GS
+  - [-0.05,  0.05]       # ZO
+  - [ 0.45,  0.55]       # RS / BS
+  - [ 0.90,  1.00]       # RB / BB

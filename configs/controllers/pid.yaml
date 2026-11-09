@@ -1,0 +1,7 @@
+# PID baseline on the normalised pixel error.                        [A18]
+# Placeholder gains — they are tuned with the same budget as the FLC.
+type: pid
+kp: 1.0
+ki: 0.0
+kd: 0.1
+d_filter_tau: 0.1        # s, low-pass filter on the derivative term
