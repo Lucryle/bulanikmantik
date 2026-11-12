@@ -39,7 +39,20 @@ class TriangularMF:
         if not 0.0 < self.height <= 1.0:
             raise ValueError("height must be in (0, 1]")
 
+    def _scalar(self, x: float) -> float:
+        """Same formula as below for one float (plain Python, ~10x faster;
+        the controller evaluates one input per time step)."""
+        if (self.left_shoulder and x <= self.b) or (self.right_shoulder and x >= self.b) or x == self.b:
+            return self.height
+        if self.a < x < self.b:
+            return self.height * (x - self.a) / (self.b - self.a)
+        if self.b < x < self.c:
+            return self.height * (self.c - x) / (self.c - self.b)
+        return 0.0
+
     def __call__(self, x):
+        if np.ndim(x) == 0:
+            return self._scalar(float(x))
         x = np.asarray(x, dtype=float)
         mu = np.zeros_like(x)
         if self.b > self.a:

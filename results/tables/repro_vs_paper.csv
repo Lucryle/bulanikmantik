@@ -1,0 +1,5 @@
+paper source,metric,paper PID,paper FLC,paper change (%),our PID,our IT2-FLC,our change (%)
+abstract,capture time (s),5.2,4.2,-19.2,17.013,15.268,-10.3
+abstract,tracking error (m),0.8,0.68,-15.0,0.886,0.774,-12.6
+Table 3 (benchmark),capture time (s),4.8,4.2,-12.5,17.013,15.268,-10.3
+Table 3 (benchmark),tracking error (m),0.75,0.68,-9.3,0.886,0.774,-12.6

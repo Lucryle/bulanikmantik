@@ -61,3 +61,56 @@ def plot_trial(result: dict, path: str, title: str = "") -> None:
     fig.tight_layout()
     fig.savefig(path, dpi=130)
     plt.close(fig)
+
+
+def method_boxplots(df, x, order, methods, path, xlabel):
+    """Box plots of the headline metrics: one box per (group ``x``, method)."""
+    metrics = [("capture_time", "capture time (s)"), ("tracking_error", "tracking error after capture (m)"),
+               ("mean_error_all", "mean error, whole trial (m)")]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
+    width = 0.8 / len(methods)
+    for ax, (col, label) in zip(axes, metrics):
+        for i, m in enumerate(methods):
+            data = [df[(df[x] == o) & (df["method"] == m)][col].dropna().values for o in order]
+            pos = np.arange(len(order)) + (i - (len(methods) - 1) / 2) * width
+            bp = ax.boxplot(data, positions=pos, widths=width * 0.9, patch_artist=True, showfliers=True,
+                            flierprops={"markersize": 3})
+            for patch in bp["boxes"]:
+                patch.set_facecolor(f"C{i}")
+                patch.set_alpha(0.6)
+            ax.plot([], [], "s", color=f"C{i}", alpha=0.6, label=m)
+        ax.set_xticks(range(len(order)), [str(o) for o in order])
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(label)
+        ax.grid(alpha=0.3, axis="y")
+    axes[0].legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(path, dpi=130)
+    plt.close(fig)
+
+
+def sweep_plot(df, x, methods, path, xlabel, xscale="linear"):
+    """Mean ± 95 % CI of the headline metrics versus a swept parameter ``x``."""
+    from src.stats import mean_ci
+
+    metrics = [("capture_time", "capture time (s)"), ("tracking_error", "tracking error after capture (m)"),
+               ("mean_error_all", "mean error, whole trial (m)"), ("captured", "capture rate")]
+    fig, axes = plt.subplots(1, 4, figsize=(18, 4))
+    for ax, (col, label) in zip(axes, metrics):
+        for i, m in enumerate(methods):
+            sub = df[df["method"] == m]
+            xs = sorted(sub[x].unique())
+            stats = [mean_ci(sub[sub[x] == v][col].astype(float)) for v in xs]
+            mean = np.array([s[0] for s in stats])
+            lo = np.array([s[1] for s in stats])
+            hi = np.array([s[2] for s in stats])
+            ax.plot(xs, mean, "o-", color=f"C{i}", lw=1.4, ms=4, label=m)
+            ax.fill_between(xs, lo, hi, color=f"C{i}", alpha=0.15)
+        ax.set_xscale(xscale)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(label)
+        ax.grid(alpha=0.3)
+    axes[0].legend(fontsize=8)
+    fig.tight_layout()
+    fig.savefig(path, dpi=130)
+    plt.close(fig)

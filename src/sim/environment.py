@@ -66,6 +66,7 @@ def run_trial(cfg: dict, ctrl_cfg: dict, mf_setting: dict | None, seed: int) -> 
     rec.update({k: np.full(n_steps, np.nan) for k in
                 ("t", "uav_yaw", "kx", "ky", "v_cmd", "r_cmd", "compute_ms")})
     rec["measured"] = np.zeros(n_steps, dtype=bool)
+    rec["in_view"] = np.zeros(n_steps, dtype=bool)      # true target inside the image
 
     last_raw = None
     t = 0.0
@@ -105,6 +106,7 @@ def run_trial(cfg: dict, ctrl_cfg: dict, mf_setting: dict | None, seed: int) -> 
         rec["uav_yaw"][k] = s.yaw
         rec["target_pos"][k] = target.pos
         rec["measured"][k] = len(detections) > 0
+        rec["in_view"][k] = cam.in_view(*cam.world_to_pixel(target.pos, s.xy, s.yaw, h))
         rec["v_cmd"][k], rec["r_cmd"][k] = v_cmd, r_cmd
 
         # 7: advance the world
