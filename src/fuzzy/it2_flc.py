@@ -103,3 +103,79 @@ def paper_it2_flc(ctrl_cfg: dict, mf_setting: dict) -> IT2FLC:
         input_gains=[ctrl_cfg.get("input_gain", 1.0)],
         output_gain=ctrl_cfg.get("output_gain", 1.0),
     )
+
+
+# ---------------------------------------------------------------------------
+# Proposed extension: two inputs (error e and error derivative ė), 25 rules.
+# ---------------------------------------------------------------------------
+def pd_rule_table(n_terms: int = 5) -> list[tuple[tuple[int, int], int]]:
+    """Mac Vicar-Whelan diagonal rule table.
+
+    Term indices 0..4 = NB, NS, ZE/MM, PS, PB for both inputs and
+    LB/GB .. RB/BB for the output. Rule (i, j) -> clip(i + j - 2, 0, 4):
+    the output grows with the error AND with the speed at which the error
+    grows. Example: e = PS (3) and ė = NS (1) -> ZO (2): the error is
+    positive but already shrinking, so do not push further (no overshoot).
+    """
+    mid = n_terms // 2
+    return [((i, j), int(np.clip(i + j - mid, 0, n_terms - 1)))
+            for i in range(n_terms) for j in range(n_terms)]
+
+
+def derivative_terms(delta: float, lower_height: float) -> list[IT2TriangularMF]:
+    """Five symmetric IT2 terms for the normalised error derivative ė
+    (peaks at -1, -0.5, 0, 0.5, 1; same FOU rule as the error terms)."""
+    peaks = [-1.0, -0.5, 0.0, 0.5, 1.0]
+    return [IT2TriangularMF.from_triangle(p - 0.5, p, p + 0.5, delta, lower_height,
+                                          left_shoulder=(i == 0), right_shoulder=(i == 4))
+            for i, p in enumerate(peaks)]
+
+
+class FuzzyPD(Controller):
+    """IT2 fuzzy-PD controller: computes ė from consecutive errors and feeds
+    (e, ė) into a 2-input IT2 FLC.
+
+    ė is low-pass filtered (time constant ``d_filter_tau``) exactly like the
+    PID derivative, because the pixel error is noisy. ``de_gain`` (seconds)
+    scales ė into [-1, 1] inside the FLC (input gain of the 2nd input).
+    """
+
+    def __init__(self, flc: IT2FLC, dt: float, d_filter_tau: float = 0.1) -> None:
+        self.flc = flc
+        self.dt = float(dt)
+        self.d_filter_tau = float(d_filter_tau)
+        self.reset()
+
+    def reset(self) -> None:
+        self.prev_error: float | None = None
+        self.d_filtered = 0.0
+
+    def compute(self, error: float) -> float:
+        e = float(error)
+        if self.prev_error is not None:
+            raw_d = (e - self.prev_error) / self.dt
+            alpha = self.dt / (self.d_filter_tau + self.dt)
+            self.d_filtered += alpha * (raw_d - self.d_filtered)
+        self.prev_error = e
+        return self.flc.compute(e, self.d_filtered)
+
+
+def pd_it2_flc(ctrl_cfg: dict, mf_setting: dict, dt: float) -> FuzzyPD:
+    """Proposed 2-input, 25-rule IT2 fuzzy-PD controller.
+
+    The error input uses the SAME membership functions as the paper's
+    controller (so only the added ė input differs); ė uses symmetric terms.
+    """
+    delta = ctrl_cfg.get("fou_delta", 0.0)
+    h_low = ctrl_cfg.get("lower_height", 1.0)
+    _, e_terms = build_it2_terms(mf_setting, delta=delta, lower_height=h_low,
+                                 center=ctrl_cfg.get("mf_center", 14.0))
+    flc = IT2FLC(
+        input_terms=[e_terms, derivative_terms(delta, h_low)],
+        rules=pd_rule_table(len(e_terms)),
+        output_centers=ctrl_cfg["output_centers"],
+        type_reduction=ctrl_cfg.get("type_reduction", "km"),
+        input_gains=[ctrl_cfg.get("input_gain", 1.0), ctrl_cfg.get("de_gain", 0.2)],
+        output_gain=ctrl_cfg.get("output_gain", 1.0),
+    )
+    return FuzzyPD(flc, dt, ctrl_cfg.get("d_filter_tau", 0.1))

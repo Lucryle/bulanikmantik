@@ -74,3 +74,47 @@ def test_pid_integral_removes_steady_error():
     for _ in range(10):
         u = pid.compute(0.2)
     assert u == pytest.approx(0.2)
+
+
+# ---- proposed IT2 fuzzy-PD ---------------------------------------------------
+from src.fuzzy.it2_flc import FuzzyPD, pd_rule_table  # noqa: E402
+
+
+def test_pd_rule_table_is_diagonal():
+    table = dict(pd_rule_table())
+    assert len(table) == 25
+    assert table[(2, 2)] == 2                 # MM error, zero rate -> ZO
+    assert table[(0, 0)] == 0 and table[(4, 4)] == 4
+    assert table[(3, 1)] == 2                 # positive but shrinking error -> ZO
+    for (i, j), c in table.items():           # anti-symmetric
+        assert table[(4 - i, 4 - j)] == 4 - c
+
+
+def pd_controller(setting="setting1"):
+    return build_controller(load_controller("it2_pd"), load_mf_setting(setting), 0.05)
+
+
+def test_pd_is_a_fuzzy_pd():
+    pd_ctrl = pd_controller()
+    assert isinstance(pd_ctrl, FuzzyPD)
+    flc = pd_ctrl.flc
+    # setting 1 is symmetric -> zero error and zero rate give zero command
+    assert flc.compute(0.0, 0.0) == pytest.approx(0.0, abs=1e-9)
+    # (almost) monotonic in the error for a fixed rate and in the rate for a
+    # fixed error. With 2 inputs the min t-norm + FOU can create dips of
+    # ~2e-5 (KM switch points move), which are irrelevant for control.
+    out_e = np.array([flc.compute(e, 0.0) for e in E])
+    out_d = np.array([flc.compute(0.2, d) for d in E * 5])
+    assert np.all(np.diff(out_e) >= -1e-4) and np.all(np.diff(out_d) >= -1e-4)
+    # a growing error asks for more than a shrinking one
+    assert flc.compute(0.3, 1.0) > flc.compute(0.3, -1.0)
+
+
+def test_pd_derivative_from_error_sequence():
+    pd_ctrl = pd_controller()
+    first = pd_ctrl.compute(0.2)              # no derivative on the first call
+    assert first == pytest.approx(pd_ctrl.flc.compute(0.2, 0.0))
+    pd_ctrl.compute(0.3)
+    assert pd_ctrl.d_filtered > 0             # error grew -> positive rate
+    pd_ctrl.reset()
+    assert pd_ctrl.prev_error is None and pd_ctrl.d_filtered == 0.0

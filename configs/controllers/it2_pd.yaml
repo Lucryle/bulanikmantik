@@ -1,0 +1,18 @@
+# PROPOSED: IT2 fuzzy-PD controller, inputs e and ė, 25 rules       [A22]
+# Error MFs = the paper's MFs (mf_settings/*); ė MFs = 5 symmetric terms.
+# Rule (i, j) -> clip(i + j - 2, 0, 4)  (Mac Vicar-Whelan table).
+type: it2_pd
+fou_delta: 0.05          # same FOU as the paper controller              [A14]
+lower_height: 0.8
+mf_center: 14.0
+type_reduction: km
+input_gain: 1.0          # scale on e (tuned)
+de_gain: 0.2             # s, scale on ė (tuned)
+output_gain: 1.0         # scale on the output (tuned)
+d_filter_tau: 0.1        # s, low-pass filter on ė (same as the PID)
+output_centers:
+  - [-1.00, -0.90]
+  - [-0.55, -0.45]
+  - [-0.05,  0.05]
+  - [ 0.45,  0.55]
+  - [ 0.90,  1.00]
