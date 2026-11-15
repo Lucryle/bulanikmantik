@@ -1,0 +1,499 @@
+% Technical report — compile with:  pdflatex report.tex  (run twice)
+\documentclass[conference,a4paper]{IEEEtran}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[turkish,shorthands=off]{babel}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,babel}
+\usepackage{cite}
+\usepackage[hidelinks]{hyperref}
+\hypersetup{pdftitle={Görüntü Tabanlı İHA Hedef Takibinde Aralık Tip-2 Bulanık Mantık Kontrolü},
+            pdfauthor={Mustafa Burak Loğoğlu}}
+\graphicspath{{../results/figures/}}
+
+\begin{document}
+
+\title{Görüntü Tabanlı İHA Hedef Takibinde Aralık Tip-2 Bulanık Mantık Kontrolü:\\ Yeniden Gerçekleştirme ve Türev Girişli Genişletme}
+
+\author{\IEEEauthorblockN{Mustafa Burak Loğoğlu (1306230027)}
+\IEEEauthorblockA{Bilgisayar Mühendisliği, İstanbul Üniversitesi-Cerrahpaşa\\
+Bulanık Mantık Dersi, 2026--2027 Güz --- Öğretim Elemanı: Tolgahan Öztürk\\
+Kod: \url{https://github.com/Lucryle/bulanikmantik}}}
+
+\maketitle
+
+\begin{abstract}
+Bu çalışmada, Li vd.~\cite{li2024} tarafından önerilen ve insansız hava aracının (İHA) kameradaki hedef konumuna göre yönelim ve hızını iki adet Aralık Tip-2 Bulanık Mantık Kontrolcüsü (IT2-FLC) ile ayarladığı hedef takip yöntemi Python ortamında yeniden gerçekleştirilmiştir. Makalede verilmeyen tüm parametreler açık ve ayarlanabilir varsayımlar olarak belgelenmiş, makaledeki sayısal sonuçlar tek tek kontrol edilmiş ve birkaç tutarsızlık raporlanmıştır. Aynı ayar bütçesiyle eğitilmiş PID ile 30 eşleştirilmiş denemede karşılaştırıldığında IT2-FLC'nin hedefi yakalama süresi \%10,3, takip hatası \%12,6 azalmıştır; makalenin bildirdiği yön (\%12,5--19,2 ve \%9,3--15,0) yeniden üretilmiştir. Özgün katkı olarak hata türevini ikinci giriş olarak kullanan 25 kurallı bir IT2 bulanık-PD kontrolcü (IT2-FPD) önerilmiş; Tip-1/Tip-2, FOU genişliği, gürültü, parçacık filtresi, gecikme ve tip indirgeme yöntemi üzerine ablasyon deneyleri yapılmıştır. IT2-FPD takip hatasının saçılımını \%10,4 azaltırken yakalama süresini \%13,9 uzatmıştır; yani önerilen yöntem genel olarak makaledeki kontrolcüden daha iyi değildir ve bu sonucun nedenleri tartışılmıştır. Ayrıca Nie--Tan tip indirgemesinin Karnik--Mendel ile aynı doğruluğu yarı sürede verdiği gösterilmiştir.
+\end{abstract}
+
+\begin{IEEEkeywords}
+aralık tip-2 bulanık mantık, Karnik--Mendel, İHA, görsel hedef takibi, parçacık filtresi, yeniden üretilebilirlik
+\end{IEEEkeywords}
+
+%======================================================================
+\section{Giriş (Introduction)}
+İHA'larla hareketli bir yer hedefinin takibi arama-kurtarma, gözetleme ve trafik izleme gibi uygulamalarda temel bir problemdir. Hedef kamerada bir piksel konumu olarak görülür; kontrolcünün görevi, hedefin görüntü merkezine olan uzaklığını ($\Delta x$, $\Delta y$) uçuş komutlarına çevirmektir. Bu, klasik bir görsel servo problemidir~\cite{chaumette2006}. Algılayıcı gürültüsü, kaçırılan tespitler, algılama gecikmesi, rüzgâr ve hedefin ani manevraları nedeniyle doğrusal bir PID kontrolcünün ayarı zordur.
+
+Bulanık mantık~\cite{zadeh1965} bu tür, modeli tam bilinmeyen sistemlerde uzman bilgisini ``hata büyük negatifse sola sert dön'' gibi dilsel kurallarla ifade etmeyi sağlar~\cite{mamdani1975}. Aralık Tip-2 bulanık kümeler ise üyelik derecesinin kendisini de belirsiz kabul eder; bu belirsizlik ayak izi (FOU) sayesinde ölçüm gürültüsüne karşı daha dayanıklı kontrolcüler elde edilebilir~\cite{karnik1999,mendel2002,wu2012}.
+
+Li vd.~\cite{li2024} Vision Transformer tabanlı hedef tespiti, parçacık filtresi ile konum tahmini ve iki IT2-FLC'den oluşan bir sistem önermiş, gerçek bir DJI Phantom 4 Pro ile yaptıkları deneylerde PID'e göre yaklaşık \%20 daha kısa yakalama süresi ve \%15 daha düşük takip hatası bildirmiştir. Ancak makalede kontrolcünün yeniden kurulması için gereken birçok parametre (FOU, çıkış üyelik fonksiyonları, PID kazançları, parçacık filtresi ayarları) verilmemiştir ve kod paylaşılmamıştır.
+
+Bu çalışmanın katkıları şunlardır:
+\begin{itemize}
+\item Makalenin bulanık kontrol katmanının, parçacık filtresi ve benzetilmiş bir algılayıcı ile birlikte, açık varsayımlarla ve tek komutla çalışan biçimde yeniden gerçekleştirilmesi.
+\item Makaledeki sayıların kontrolü; özet ile tablolar arasındaki ve metin ile tablolar arasındaki tutarsızlıkların raporlanması.
+\item Tüm kontrolcülerin aynı bütçe ve ayrı tohum kümesiyle ayarlandığı adil bir karşılaştırma protokolü ve eşleştirilmiş istatistiksel testler.
+\item Özgün katkı: hata türevini ikinci giriş olarak kullanan 25 kurallı IT2 bulanık-PD kontrolcü ve altı ablasyon deneyi.
+\end{itemize}
+
+%======================================================================
+\section{İlgili Çalışmalar (Related Work)}
+\textbf{Tip-2 bulanık kontrol.} Karnik, Mendel ve Liang~\cite{karnik1999} tip-2 bulanık mantık sistemlerinin çıkarım yapısını, Liang ve Mendel~\cite{liang2000} aralık tip-2 sistemlerin tasarımını tanımlamıştır. Tip indirgeme için Karnik--Mendel (KM) algoritması~\cite{karnik2001} standart yöntemdir; Wu ve Mendel~\cite{wu2009} hızlandırılmış sürümünü, Nie ve Tan~\cite{nie2008} ise alt ve üst üyelik fonksiyonlarının ortalamasını kullanan kapalı biçimli, yinelemesiz bir yaklaşımı önermiştir. Wu~\cite{wu2012}, IT2 ve Tip-1 kontrolcüler arasındaki temel farkın ``uyarlanabilirlik'' ve ``yenilik'' olduğunu, yani IT2 kontrolcünün çıkış eğrisinin girişe göre kendiliğinden değiştiğini göstermiştir.
+
+\textbf{Robot ve İHA uygulamaları.} Hagras~\cite{hagras2004} gezgin robotlarda hiyerarşik tip-2 kontrolün Tip-1'den daha iyi sonuç verdiğini ve daha az kuralla çalıştığını göstermiştir. Kumbasar ve Hagras~\cite{kumbasar2014} IT2 bulanık PID kontrolcülerin parametrelerini meta-sezgisel optimizasyonla ayarlamış; Sarabakha vd.~\cite{sarabakha2018} tek girişli IT2 bulanık PID yapısında FOU parametrelerinin kontrol yüzeyine etkisini açıklayıp bunu gerçek İHA'larda uygulamıştır. Harik vd.~\cite{harik2017} görüntü tabanlı İHA hedef takibinde öngörülü bir bulanık kontrolcü kullanmıştır.
+
+\textbf{Makalenin karşılaştırdığı yöntemler.} Li vd.~\cite{li2024} sonuçlarını üç çalışmayla karşılaştırır: Zatout vd.~\cite{zatout2022} dörtrotorlu İHA yönelim kontrolü için bulanık kontrolcüyü PSO, guguk kuşu ve yarasa algoritmalarıyla optimize etmiş; de Koning ve Jamshidnejad~\cite{dekoning2023} arama-kurtarmada model öngörülü kontrol ile bulanık mantığı hiyerarşik olarak birleştirmiş; Tsitses vd.~\cite{tsitses2024} sabit kanatlı İHA'nın gemi güvertesine inişi için bulanık bir sistem önermiştir.
+
+\textbf{Kestirim ve algılama.} Parçacık filtresi~\cite{gordon1993,arulampalam2002} doğrusal olmayan ve Gauss olmayan durumlarda hedef konumunu tahmin etmek için yaygın olarak kullanılır. Vision Transformer~\cite{dosovitskiy2021} makalede hedef tespiti için kullanılmıştır. Nishad vd.~\cite{nishad2025} ani duran ve kalkan hedefler için sabit hız varsayımının yetersiz kaldığını ve uyarlanabilir hareket modellerinin gerekli olduğunu göstermiştir; bu bulgu bizim C senaryosundaki gözlemlerimizle uyumludur.
+
+Tablo~\ref{tab:lit} bu çalışmaları özetlemektedir.
+
+\begin{table}[t]
+\centering
+\caption{İlgili çalışmaların karşılaştırması}
+\label{tab:lit}
+\footnotesize
+\begin{tabular}{@{}p{1.6cm}p{1.6cm}p{2.0cm}p{1.9cm}@{}}
+\toprule
+Çalışma & Bulanık tip & Uygulama & Not \\
+\midrule
+\cite{hagras2004} & IT2 & gezgin robot & hiyerarşik, az kural \\
+\cite{kumbasar2014} & IT2 PID & süreç kontrolü & BB-BC ile ayar \\
+\cite{sarabakha2018} & IT2 PID & İHA yörünge & FOU etkisi, gerçek uçuş \\
+\cite{harik2017} & T1 & İHA görsel takip & öngörülü \\
+\cite{zatout2022} & T1 & İHA yönelim & PSO/CS/BAT ile ayar \\
+\cite{dekoning2023} & T1 + MPC & arama-kurtarma & hiyerarşik \\
+\cite{tsitses2024} & T1 & İHA iniş & RF algılama \\
+\cite{li2024} & IT2 & İHA görsel takip & ViT + PF, referans \\
+Bu çalışma & IT2, IT2-PD & İHA görsel takip & benzetim, ablasyon \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%======================================================================
+\section{Teorik Altyapı (Theoretical Background)}
+\subsection{Bulanık küme ve Mamdani çıkarımı}
+Bir bulanık küme $A$, her $x$ elemanına $[0,1]$ aralığında bir üyelik derecesi $\mu_A(x)$ atar~\cite{zadeh1965}. Bu çalışmada üçgen üyelik fonksiyonu (ÜF) kullanılır:
+\begin{equation}
+\mu(x;a,b,c)=\max\!\Big(0,\min\Big(\tfrac{x-a}{b-a},\tfrac{c-x}{c-b}\Big)\Big).
+\end{equation}
+``Hata'' gibi bir dilsel değişken NB (negatif büyük), NS, MM (orta), PS, PB gibi terimlerle ifade edilir. Mamdani tipi bir kontrolcüde~\cite{mamdani1975} her kural ``EĞER $e$ NB İSE çıkış LB'' biçimindedir; kuralın ateşlenme derecesi önceki kısmın üyelik derecesidir (çok girişte min t-normu), çıkış ise kuralların ağırlıklı birleşimi ve durulaştırma ile elde edilir.
+
+\subsection{Aralık Tip-2 bulanık kümeler}
+Aralık tip-2 bir kümede üyelik derecesi tek bir sayı değil, bir aralıktır: $[\underline{\mu}(x),\overline{\mu}(x)]$. Alt ÜF (LMF) ile üst ÜF (UMF) arasındaki bölgeye belirsizlik ayak izi (FOU) denir~\cite{mendel2002}. Böylece ``bu hata değeri MM kümesine 0,6 ile 0,8 arasında bir derecede aittir'' denebilir. Bir kuralın ateşlenmesi de aralık olur: $[\underline{f}_i,\overline{f}_i]$.
+
+\subsection{Karnik--Mendel tip indirgemesi}
+Ağırlık merkezi (centre-of-sets) tip indirgemesinde her kuralın sonucu bir aralık $[c_{l,i},c_{r,i}]$ ile temsil edilir. Çıkış aralığının uçları
+\begin{equation}
+y_l=\min_{f_i\in[\underline{f}_i,\overline{f}_i]}\frac{\sum_i f_i c_{l,i}}{\sum_i f_i},\qquad
+y_r=\max_{f_i\in[\underline{f}_i,\overline{f}_i]}\frac{\sum_i f_i c_{r,i}}{\sum_i f_i}
+\end{equation}
+olarak tanımlanır. Bu en küçük/en büyük değerler, ateşleme seviyelerinin bir ``geçiş noktasının'' bir yanında alt, diğer yanında üst sınırda olduğu durumda elde edilir. KM algoritması~\cite{karnik2001} bu geçiş noktasını yinelemeli olarak bulur ($y_l$ için):
+\begin{enumerate}
+\item Merkezleri küçükten büyüğe sırala: $c_1\le\dots\le c_N$.
+\item Başlangıç: $f_i=(\underline{f}_i+\overline{f}_i)/2$, $y=\sum f_i c_i/\sum f_i$.
+\item $c_k\le y\le c_{k+1}$ olacak biçimde geçiş noktası $k$'yı bul.
+\item $i\le k$ için $f_i=\overline{f}_i$, $i>k$ için $f_i=\underline{f}_i$ al; yeni $y'$ değerini hesapla.
+\item $y'=y$ ise dur ($y_l=y$), değilse $y=y'$ yapıp 3. adıma dön.
+\end{enumerate}
+$y_r$ için 4. adımda alt ve üst sınırların yerleri değişir. Algoritma en fazla $N$ yinelemede, pratikte 2--3 yinelemede yakınsar~\cite{karnik2001,wu2009}. Kesin çıkış $y=(y_l+y_r)/2$'dir. Kodda bu adımlar \texttt{src/fuzzy/type\_reduction.py} dosyasında numaralı yorumlarla yer alır. Nie--Tan yöntemi~\cite{nie2008} ise doğrudan $y=\sum_i \tfrac{\underline{f}_i+\overline{f}_i}{2}c_i \big/ \sum_i \tfrac{\underline{f}_i+\overline{f}_i}{2}$ hesaplar; yineleme gerektirmez.
+
+\subsection{Parçacık filtresi}
+Parçacık filtresi~\cite{gordon1993,arulampalam2002} hedefin durumunu ($x,y,v_x,v_y$) $N$ adet ağırlıklı örnekle temsil eder. Her adımda (i) parçacıklar hareket modeline göre ilerletilir, (ii) yeni ölçüme olan uzaklıklarına göre ağırlıklandırılır, (iii) ağırlıklar normalize edilir, (iv) etkin parçacık sayısı düşünce yeniden örnekleme yapılır ve (v) ağırlıklı ortalama tahmin olarak alınır. Makale de bu adımları tanımlamaktadır~\cite{li2024}.
+
+%======================================================================
+\section{Referans Yöntem (Original Method)}
+\subsection{Mimari}
+Referans sistemde~\cite{li2024} İHA kamerasından gelen görüntü kenar (edge) cihazlarda bir Vision Transformer ile işlenir, hedefin piksel konumu parçacık filtresiyle düzeltilir ve görüntü merkezine göre sapmalar $\Delta x$, $\Delta y$ hesaplanır. Bu sapmalar normalize edilir ($k_x=\Delta x/x_c$, $k_y=\Delta y/y_c$) ve iki ayrı IT2-FLC'ye verilir: üstteki kontrolcü yönelimi (yaw), alttaki hızı belirler. Çıkışlar $k_{yaw}=\text{yaw}/(\pi/3)$ ve $k_v=v/2$ ile ölçeklenir.
+
+\subsection{Üyelik fonksiyonları ve kurallar}
+Girişler beş terimle ifade edilir: $E=\{\text{NB},\text{NS},\text{MM},\text{PS},\text{PB}\}$. Yönelim çıkışı $F=\{\text{LB},\text{LS},\text{ZO},\text{RS},\text{RB}\}$ (sol büyük \ldots sağ büyük), hız çıkışı $G=\{\text{GB},\text{GS},\text{ZO},\text{BS},\text{BB}\}$ terimlerine sahiptir. Her kontrolcüde beş kural vardır: NB$\to$LB, NS$\to$LS, MM$\to$ZO, PS$\to$RS, PB$\to$RB (hız için aynı sıra). Makale yalnızca $\Delta y$ için, 0--28 ölçeğinde üç ÜF ayarı verir (Tablo~\ref{tab:mf}); FOU, çıkış ÜF'leri, $\Delta x$ ÜF'leri, t-normu ve tip indirgeme algoritması verilmemiştir.
+
+\begin{table}[t]
+\centering
+\caption{Makaledeki $\Delta y$ üyelik fonksiyonları (0--28 ölçeği)~\cite{li2024}}
+\label{tab:mf}
+\footnotesize
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Terim & Benchmark & Ayar 1 & Ayar 2 \\
+\midrule
+NB & (0, 5, 10) & (0, 6, 12) & (0, 4, 10) \\
+NS & (3, 8, 13) & (4, 9, 14) & (3, 7, 12) \\
+MM & (8, 13, 18) & (9, 14, 19) & (7, 12, 17) \\
+PS & (13, 18, 23) & (14, 19, 24) & (12, 17, 22) \\
+PB & (18, 23, 28) & (19, 24, 29) & (17, 22, 28) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Deneyler ve bildirilen sonuçlar}
+Makalede üç sahne (A: hızlı hedef, B: engelli ve ışığı değişen ortam, C: hareket biçimi değişimi) her biri 10 denemeyle, ayrıca üç rüzgâr hızında (4,9; 9,6; 12,1~m/s) deney yapılmıştır. Önerilen yöntem için yakalama süresi yaklaşık 4,2~s, takip hatası 0,68~m, gürbüzlük indeksi 0,84 olarak bildirilmiş; özet bölümünde PID için 5,2~s ve 0,80~m verilmiştir.
+
+\subsection{Eleştirel değerlendirme}
+Makaledeki sayıları kontrol ettiğimizde (ayrıntı: \texttt{docs/PAPER\_VERIFICATION.md}) şu sorunlar bulunmuştur:
+\begin{itemize}
+\item Özetteki PID değerleri (5,2~s / 0,80~m) Tablo~3'teki PID satırıyla (4,8~s / 0,75~m) değil, CNN satırıyla aynıdır. Tablo~3'e göre iyileşme \%20/\%15 değil, \%12,5/\%9,3'tür.
+\item Gürbüzlük indeksi ``standart sapma'' olarak tanımlanmıştır (düşük daha iyi), ancak önerilen yöntemin değeri (0,84) PID'den (0,78) yüksektir ve metin bunu üstünlük olarak sunar.
+\item Tablo~5 yorumunda iki karşılaştırmanın yönü terstir (Tsitses vd. ile yakalama süresi, de Koning ile gürbüzlük).
+\item En yüksek rüzgârda (12,1~m/s) en kısa yakalama süresi bildirilmiştir; bu sezgiye aykırıdır ve açıklanmamıştır. Rüzgâr deneyinde PID sonucu yoktur.
+\item Benchmark ayarında MM tepe noktası (13) ölçeğin ortasında (14) değildir; Ayar~1'de PB 28'i aşar.
+\end{itemize}
+Bu nedenle mutlak değerleri değil, PID'e göre \emph{göreli iyileşmeyi} karşılaştırdık.
+
+%======================================================================
+\section{Yeniden Gerçekleştirme Yöntemi (Reproduction Methodology)}
+\subsection{Kapsam (MRR)}
+Asgari yeniden gerçekleştirme kapsamı; makaledeki iki IT2-FLC (beşer kural, üç ÜF ayarı), parçacık filtresi, aynı giriş/çıkışlara sahip PID kontrolcü, üç sahne, üç rüzgâr hızı ve makaledeki üç metrik olarak belirlenmiştir. ViT ve kenar donanımı, gürültü, kaçırma, yanlış tespit ve gecikme içeren benzetilmiş bir algılayıcıyla değiştirilmiştir; çünkü çalışmanın bulanık mantık katkısı kontrol katmanındadır ve makale ViT'in yapısını ve verisini vermemiştir.
+
+\subsection{Benzetim modeli}
+Şekil~\ref{fig:arch} benzetim döngüsünü göstermektedir. Kontrol frekansı 20~Hz, deneme süresi 40~s'dir. İHA 10~m sabit irtifada düzlemsel bir ``tek tekerlek'' modeli ile hareket eder; hız ve yönelim hızı komutları birinci dereceden gecikmeyle uygulanır ($\tau_v=0{,}3$~s, $\tau_r=0{,}2$~s), $v\in[-2,2]$~m/s, $r\in[-\pi/3,\pi/3]$~rad/s. Kamera 1920$\times$1080 çözünürlüklü, 84$^\circ$ yatay görüş açılı ve aşağı bakan bir iğne deliği kamerasıdır. Algılayıcı gerçek piksel konumuna $\sigma=5$~px Gauss gürültüsü ekler ve sonucu 0,1~s gecikmeyle verir. Parçacık filtresi 500 parçacık, sabit hız hareket modeli, sistematik yeniden örnekleme ve aykırı değer terimi içeren bir olabilirlik kullanır. Rüzgâr, İHA'nın iç kontrolcüsünün reddedemediği artık sürüklenme olarak modellenmiştir ($\alpha=0{,}04$ ve Ornstein--Uhlenbeck esintileri).
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize,
+ box/.style={draw, rounded corners, minimum height=8mm, minimum width=19mm, align=center, fill=gray!8},
+ >=Stealth]
+\node[box] (cam) at (0,0) {Kamera\\1920$\times$1080};
+\node[box] (det) at (2.9,0) {Benzetilmiş\\algılayıcı};
+\node[box] (pf)  at (5.8,0) {Parçacık\\filtresi};
+\node[box] (proj) at (5.8,-1.9) {Görüntüye izdüşüm\\$\Delta x,\ \Delta y$};
+\node[box] (flc) at (2.9,-1.9) {IT2-FLC (yaw)\\IT2-FLC (hız)};
+\node[box] (uav) at (0,-1.9) {İHA modeli\\+ rüzgâr};
+\draw[->] (cam) -- node[above]{piksel} (det);
+\draw[->] (det) -- node[above]{0,1 s gecikme} (pf);
+\draw[->] (pf) -- node[right]{tahmin} (proj);
+\draw[->] (proj) -- node[above]{$k_x,k_y$} (flc);
+\draw[->] (flc) -- node[above]{$r,\ v$} (uav);
+\draw[->] (uav) -- node[left]{konum} (cam);
+\end{tikzpicture}
+\caption{Benzetimdeki kapalı çevrim. ViT ve kenar cihazları, gecikmeli ve gürültülü bir algılayıcıyla temsil edilmiştir.}
+\label{fig:arch}
+\end{figure}
+
+Tablo~\ref{tab:params} benzetimin tüm temel parametrelerini ve kaynaklarını özetlemektedir. ``Makale'' olarak işaretlenmeyen her değer bir varsayımdır ve yapılandırma dosyalarından değiştirilebilir.
+
+\begin{table}[t]
+\centering
+\caption{Benzetim parametreleri (M: makaleden, V: varsayım)}
+\label{tab:params}
+\footnotesize
+\begin{tabular}{@{}lll@{}}
+\toprule
+Parametre & Değer & Kaynak \\
+\midrule
+Kontrol adımı / süre & 0,05 s (20 Hz) / 40 s & V \\
+İHA irtifası & 10 m & V \\
+Hız aralığı & $[-2,2]$ m/s & M (Denk. 4) \\
+Yönelim hızı aralığı & $[-\pi/3,\pi/3]$ rad/s & M (Denk. 3) \\
+Komut gecikmeleri $\tau_v,\tau_r$ & 0,3 s, 0,2 s & V \\
+Kamera çözünürlüğü & 1920$\times$1080 & M (Tablo 1) \\
+Yatay görüş açısı & 84$^\circ$ & V (Phantom 4 Pro) \\
+Piksel gürültüsü $\sigma$ & 5 px & V \\
+Algılama gecikmesi & 0,1 s & V \\
+Parçacık sayısı & 500 & V \\
+PF ölçüm std & 0,2 m & V \\
+Rüzgâr hızları & 4,9 / 9,6 / 12,1 m/s & M (Tablo 2) \\
+Artık rüzgâr katsayısı $\alpha$ & 0,04 & V \\
+Giriş ÜF'leri & Tablo~\ref{tab:mf} & M \\
+FOU $\delta$ / LMF yüksekliği & 0,05 / 0,8 & V \\
+Yakalama yarıçapı / süresi & 0,5 m / 1 s & V \\
+Ayar / test tohumları & 10 / 30 & V \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Bulanık kontrolcünün gerçekleştirilmesi}
+Bulanık çekirdek (ÜF, IT2 küme, KM ve Nie--Tan) hazır kütüphane kullanılmadan, okunabilir biçimde sıfırdan yazılmış ve 41 birim testiyle doğrulanmıştır. Makalede bulunmayan seçimler şunlardır:
+\begin{itemize}
+\item 0--28 ölçeği $k=(u-14)/14$ ile $[-1,1]$'e taşınmıştır. $\Delta x$ için de $\Delta y$ ÜF'leri kullanılmıştır.
+\item FOU: UMF $=(a-\delta,b,c+\delta)$, LMF $=(a+\delta,b,c-\delta)$, LMF yüksekliği 0,8, $\delta=0{,}05$.
+\item NB ve PB omuz biçimlidir; aksi hâlde $k=-1$'de hiçbir kural ateşlenmez.
+\item Çıkış merkezleri: LB $[-1,-0{,}9]$, LS $[-0{,}55,-0{,}45]$, ZO $[-0{,}05,0{,}05]$, RS $[0{,}45,0{,}55]$, RB $[0{,}9,1]$.
+\item Çıkarım min t-normu, tip indirgeme KM, durulaştırma $(y_l+y_r)/2$'dir.
+\end{itemize}
+Şekil~\ref{fig:curves} ortaya çıkan ÜF'leri ve giriş--çıkış eğrilerini göstermektedir. Önemli bir bulgu olarak, Benchmark ve Ayar~2'de MM tepe noktası ölçeğin ortasında olmadığı için sıfır hatada çıkış sıfır değildir (Benchmark için $y(0)\approx0{,}10$); bu, kapalı çevrimde küçük bir kalıcı sapmaya yol açar. Yalnızca Ayar~1 simetriktir.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{mf_settings.png}\\[1mm]
+\includegraphics[width=0.42\textwidth]{control_curves.png}
+\caption{Üstte: makaledeki üç ÜF ayarının IT2 hâli (gölgeli bölge FOU). Altta: IT2-FLC'nin giriş--çıkış eğrileri; Benchmark ve Ayar~2 eğrileri sıfırdan geçmez.}
+\label{fig:curves}
+\end{figure*}
+
+\subsection{Yazılım yapısı ve tekrar üretilebilirlik}
+Kod modüler bir yapıdadır: \texttt{src/fuzzy/} bulanık çekirdeği, \texttt{src/control/} PID'i ve ortak kontrolcü arayüzünü, \texttt{src/sim/} İHA, kamera, hedef, rüzgâr ve algılayıcı modellerini, \texttt{src/estimation/} parçacık filtresini, \texttt{src/metrics.py} ve \texttt{src/stats.py} metrikleri ve istatistiksel testleri içerir. Tüm parametreler YAML dosyalarındadır (\texttt{configs/}). Her deneme bir tohumdan türetilen dört bağımsız rastgele sayı akışı (hedef, algılayıcı, rüzgâr, parçacık filtresi) kullanır; böylece aynı tohumla çalışan farklı kontrolcüler tıpatıp aynı hedef yolunu, gürültüyü ve rüzgârı görür. Paket sürümleri \texttt{requirements.txt} dosyasında sabitlenmiştir. Birim testleri ÜF'lerin, KM'nin (ör. tüm aralıklar tek bir noktaya indiğinde Tip-1 ağırlıklı ortalamaya eşit olması), işaret kurallarının, PID'in, metriklerin ve benzetimin doğruluğunu kontrol eder. Canlı gösterim için \texttt{demo/live\_demo.py} betiği, seçilen kontrolcüleri aynı denemede yan yana canlandırır; hedef hızı, rüzgâr, gürültü ve kaçırma olasılığı komut satırından değiştirilebilir.
+
+\subsection{Adil ayar protokolü}
+Makale PID kazançlarını ve bulanık ölçek katsayılarını vermediği için tüm kontrolcüler aynı yöntemle ayarlanmıştır: 60 adaylı rastgele arama, her aday A, B, C sahnelerinde 10 ayar tohumu (1000--1009) ile çalıştırılmış, amaç fonksiyonu tüm deneme boyunca ortalama İHA--hedef uzaklığı olarak seçilmiştir. PID için $k_p,k_i,k_d$; makale IT2-FLC'si için giriş ve çıkış kazancı; önerilen IT2-FPD için giriş, türev ve çıkış kazancı ayarlanmıştır. Bulunan değerler PID için $k_p=10{,}99$, $k_i=0{,}10$, $k_d=1{,}09$; IT2-FLC için giriş kazancı 6,89, çıkış kazancı 2,83'tür. Tüm sonuçlar ayar tohumlarından ayrı olan 30 test tohumunda (0--29) raporlanır.
+
+%======================================================================
+\section{Önerilen Genişletme (Proposed Extension)}
+\subsection{Gerekçe}
+Makaledeki kontrolcünün tek girişi ve beş kuralı vardır; yani doğrusal olmayan bir P (oransal) kontrolcüdür. Hatanın büyüdüğünü mü küçüldüğünü mü bilemez. Hedef ani yön değiştirdiğinde (C sahnesi) ya da hızlı kaçtığında (A sahnesi) hatanın değişim hızı önemli bir bilgidir; klasik kontrolde bu bilgi türev terimiyle (PD) eklenir. Bulanık PD yapıları literatürde iyi bilinmektedir~\cite{macvicar1976,kumbasar2014,sarabakha2018}.
+
+\subsection{IT2 bulanık-PD (IT2-FPD)}
+Önerilen kontrolcünün iki girişi vardır: hata $e$ (makaledeki ÜF'ler, değişmeden) ve hata türevi $\dot e$. Türev, ardışık hataların farkının $\tau=0{,}1$~s'lik birinci dereceden alçak geçiren filtreden geçirilmesiyle elde edilir, çünkü piksel hatası gürültülüdür. $\dot e$ için tepe noktaları $-1,-0{,}5,0,0{,}5,1$ olan beş simetrik IT2 üçgen ÜF ve aynı FOU kuralı kullanılır. Kural tabanı 25 kurallı Mac Vicar-Whelan tablosudur~\cite{macvicar1976}: $(i,j)$ kuralının sonucu $\text{clip}(i+j-2,0,4)$ numaralı çıkış terimidir (Tablo~\ref{tab:rules}). Hata ile türevi aynı yöndeyse (hata büyüyorsa) çıkış güçlenir, zıt yöndeyse (hata zaten küçülüyorsa) çıkış yumuşar. Makaledeki ÜF'ler $e$ için korunduğundan, gözlenen farklar yalnızca $\dot e$ girişinden kaynaklanır. Şekil~\ref{fig:surface} kontrol yüzeyini göstermektedir.
+
+\begin{table}[t]
+\centering
+\caption{IT2-FPD kural tablosu (çıkış terimleri)}
+\label{tab:rules}
+\footnotesize
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+$e$ \textbackslash{} $\dot e$ & NB & NS & ZO & PS & PB \\
+\midrule
+NB & NB & NB & NB & NS & ZO \\
+NS & NB & NB & NS & ZO & PS \\
+MM & NB & NS & ZO & PS & PB \\
+PS & NS & ZO & PS & PB & PB \\
+PB & ZO & PS & PB & PB & PB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{ext_pd_control_surface.png}
+\caption{Önerilen IT2-FPD'nin kontrol yüzeyi.}
+\label{fig:surface}
+\end{figure}
+
+\subsection{Başarı ölçütü}
+Önerilen yöntem, aynı ayar bütçesiyle ayarlanmış makale IT2-FLC'si ve PID ile aynı 30 test tohumunda karşılaştırılır. Yakalama süresi, takip hatası ve gürbüzlük indeksinde istatistiksel olarak anlamlı bir iyileşme başarı olarak kabul edilmiştir.
+
+%======================================================================
+\section{Deney Kurulumu (Experimental Setup)}
+\textbf{Sahneler.} A: hedef 1,6--2,0~m/s ile düz giden ve ara sıra hafif dönen hızlı hedef (İHA'nın azami hızı 2~m/s olduğundan hedef bundan hızlı olamaz). B: 0,8--1,2~m/s zikzak hareket, \%20 kaçırma, \%3 yanlış tespit, iki örtüşme bölgesi ve deneme boyunca 5'ten 15~px'e artan gürültü (ışık değişimi). C: 10~s düz gidiş, ardından 2--5~s aralıklarla 60--150$^\circ$ ani dönüşler. Rüzgâr deneyleri 1~m/s düz giden hedefle yapılmıştır.
+
+\textbf{Metrikler.} \emph{Yakalama süresi}: İHA--hedef uzaklığının ilk kez en az 1~s boyunca 0,5~m'nin altında kaldığı an; hiç yakalanamazsa 40~s. \emph{Takip hatası}: yakalamadan sonraki ortalama uzaklık. \emph{Gürbüzlük indeksi}: yakalamadan sonraki uzaklığın standart sapması (makaledeki tanım; düşük daha iyi). Ek olarak yakalama oranı, tüm deneme boyunca ortalama hata, kontrol eforu ve adım başına hesaplama süresi raporlanmıştır.
+
+\textbf{İstatistik.} Her yöntem aynı 30 tohumla çalıştırıldığı için hedef yolu, gürültü ve rüzgâr eşleşiktir. Eşleştirilmiş $t$-testi, Wilcoxon işaretli sıra testi ve Cohen $d_z$ etki büyüklüğü hesaplanmış, \%95 güven aralıkları verilmiştir. Takip hatası, her iki yöntemin de hedefi yakaladığı tohumlar üzerinden karşılaştırılmıştır.
+
+\textbf{Deneyler.} R1: sahneler; R2: rüzgâr; R3: ÜF ayarları; E1: önerilen yöntem; E2: Tip-1/Tip-2; E3: FOU genişliği; E4: piksel gürültüsü ve kaçırma; E5: parçacık filtresi ve gecikme; E6: tip indirgeme yöntemi. Tüm tablo ve şekiller \texttt{python experiments/run\_all.py} komutuyla üretilir; bu rapordaki her sayı \texttt{results/tables/} altındaki dosyalardan alınmıştır.
+
+%======================================================================
+\section{Sonuçlar (Results)}
+\subsection{Yeniden gerçekleştirme: IT2-FLC ve PID}
+Tablo~\ref{tab:repro} makalenin bildirdiği göreli iyileşme ile bizim sonucumuzu karşılaştırmaktadır. IT2-FLC, üç sahnenin birleşiminde yakalama süresini \%10,3, takip hatasını \%12,6 azaltmıştır. Bu değerler makalenin Tablo~3'e göre hesaplanan iyileşmesiyle (\%12,5 ve \%9,3) aynı büyüklüktedir; özetteki \%19,2'den ise düşüktür. Mutlak değerler farklıdır, çünkü benzetimimiz makalenin gerçek uçuş ortamı değildir ve yakalama süresinin tanımı makalede verilmemiştir.
+
+\begin{table}[t]
+\centering
+\caption{PID'e göre göreli değişim: makale ve bu çalışma (A+B+C, 30 tohum)}
+\label{tab:repro}
+\footnotesize
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Metrik & Makale (özet) & Makale (Tablo 3) & Bu çalışma \\
+\midrule
+Yakalama süresi & $-19{,}2$\% & $-12{,}5$\% & $-10{,}3$\% \\
+ & 5,2$\to$4,2 s & 4,8$\to$4,2 s & 17,01$\to$15,27 s \\
+Takip hatası & $-15{,}0$\% & $-9{,}3$\% & $-12{,}6$\% \\
+ & 0,80$\to$0,68 m & 0,75$\to$0,68 m & 0,886$\to$0,774 m \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Sahne bazında (Şekil~\ref{fig:r1}) en büyük fark B sahnesindedir: IT2-FLC yakalama süresini \%22 ($p=0{,}029$, Wilcoxon $p=0{,}012$), takip hatasını \%28 ($p<0{,}001$, $d_z=-1{,}16$) azaltmıştır. Yakalama oranı \%80'den \%90'a çıkmıştır. A sahnesinde yakalama süresi \%2,9 kısalmış ($p=0{,}015$), takip hatasındaki fark anlamlı değildir. C sahnesinde fark küçüktür; yalnızca tüm deneme boyunca ortalama hata \%3,1 düşüktür ($p=0{,}022$). Yani makalenin iddia ettiği üstünlük, özellikle gürültülü ve tespitlerin kaçırıldığı ortamda yeniden üretilmiştir. Öte yandan IT2-FLC'nin gürbüzlük indeksi A sahnesinde PID'den kötüdür (0,178 ve 0,093~m); bu, makalenin Tablo~3'teki gürbüzlük bulgusuyla da tutarlıdır.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{repro_R1_scenarios.png}
+\caption{R1: sahnelere göre PID ve makale IT2-FLC'si (30 tohum, kutu grafikleri).}
+\label{fig:r1}
+\end{figure*}
+
+Tablo~\ref{tab:r1stats} sahne bazında eşleştirilmiş testleri vermektedir.
+
+\begin{table}[t]
+\centering
+\caption{R1 eşleştirilmiş testler: IT2-FLC ile PID (negatif = IT2-FLC daha iyi)}
+\label{tab:r1stats}
+\footnotesize
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+Sahne & Metrik & $n$ & Değişim & $p$ ($t$) & $d_z$ \\
+\midrule
+A & Yakalama süresi & 30 & $-2{,}9$\% & 0,015 & $-0{,}47$ \\
+A & Takip hatası & 20 & $-4{,}3$\% & 0,353 & $-0{,}21$ \\
+B & Yakalama süresi & 30 & $-22{,}2$\% & 0,029 & $-0{,}42$ \\
+B & Takip hatası & 23 & $-28{,}3$\% & $<$0,001 & $-1{,}16$ \\
+C & Yakalama süresi & 30 & $-10{,}1$\% & 0,348 & $-0{,}17$ \\
+C & Takip hatası & 28 & $-3{,}6$\% & 0,236 & $-0{,}23$ \\
+C & Ort. hata (tümü) & 30 & $-3{,}1$\% & 0,022 & $-0{,}44$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Rüzgâr (R2).} Rüzgâr hızı arttıkça her iki yöntemde de yakalama süresi ve hata artmaktadır (IT2-FLC: 0~m/s'de 4,66~s, 12,1~m/s'de 6,60~s). Bu, makalenin en yüksek rüzgârda en kısa süreyi bildiren Tablo~2'sinin aksine fiziksel olarak beklenen davranıştır. Rüzgârlı düz hedef deneyinde IT2-FLC biraz daha hızlı yakalamakta (ör. 9,6~m/s'de 6,19 ve 6,44~s), PID ise yakalamadan sonra daha küçük hata vermektedir (0,322 ve 0,369~m). Benchmark ÜF'lerindeki sıfır-hata sapması bu kalıcı hatanın olası bir nedenidir.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{repro_R2_wind.png}
+\caption{R2: rüzgâr hızına göre PID ve makale IT2-FLC'si (düz giden hedef, ortalama ve \%95 güven aralığı).}
+\label{fig:r2}
+\end{figure*}
+
+\textbf{ÜF ayarları (R3).} Ayar~2 en düşük takip hatasını (0,731~m) ve en kısa yakalama süresini (14,43~s), Ayar~1 en yüksek takip hatasını (0,817~m) vermiştir. Makalede de Ayar~2 en düşük hatayı vermektedir (0,65~m). Üç ayar da PID'den (17,01~s, 0,894~m) iyidir.
+
+\subsection{Önerilen IT2-FPD}
+Tablo~\ref{tab:ext} yönergedeki biçimde temel yöntem ile önerilen yöntemi karşılaştırmaktadır. IT2-FPD gürbüzlük indeksini \%10,4, tüm deneme boyunca ortalama hatayı \%2,1 ve hedefin görüntü dışında kalma oranını \%8,1 azaltmıştır. Buna karşılık yakalama süresi \%13,9 uzamış, yakalama oranı \%84,4'ten \%76,7'ye düşmüş, takip hatası \%8 artmış ve hesaplama süresi \%45 artmıştır.
+
+\begin{table}[t]
+\centering
+\caption{Temel yöntem (makale IT2-FLC) ve önerilen IT2-FPD (A+B+C)}
+\label{tab:ext}
+\footnotesize
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Metrik & Temel & Önerilen & Değişim \\
+\midrule
+Yakalama süresi (s) & 15,27 & 17,38 & +13,9\% \\
+Yakalama oranı (\%) & 84,4 & 76,7 & $-9{,}2$\% \\
+Takip hatası (m) & 0,804 & 0,868 & +8,0\% \\
+Gürbüzlük, std (m) & 0,452 & 0,405 & $-10{,}4$\% \\
+Ortalama hata, tüm deneme (m) & 1,982 & 1,940 & $-2{,}1$\% \\
+Görüş dışı süre (\%) & 5,20 & 4,78 & $-8{,}1$\% \\
+Kontrol eforu & 114,5 & 142,5 & +24,5\% \\
+Çalışma süresi (ms/adım) & 0,672 & 0,975 & +45\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Sahne bazında (Şekil~\ref{fig:e1}) tablo daha açıktır. A sahnesinde (hızlı hedef) IT2-FPD belirgin biçimde kötüdür: yakalama süresi \%22 uzun ($p<0{,}001$, $d_z=0{,}83$), yakalama oranı \%47'dir (makale kontrolcüsü \%70). Ancak yakaladığında hatası çok düzgündür (gürbüzlük 0,071~m, makale kontrolcüsünde 0,178~m). C sahnesinde (ani dönüşler) IT2-FPD 30 denemenin hepsinde hedefi yakalayan tek yöntemdir ve yakalama süresi en kısadır (8,91~s); fakat makale kontrolcüsüne göre fark anlamlı değildir ($p=0{,}71$). PID'e göre ise C sahnesinde tüm deneme ortalama hatası \%5 düşüktür ($p<0{,}001$, $d_z=-1{,}06$) ve B sahnesinde takip hatası \%15 düşüktür ($p<0{,}001$). Rüzgâr deneyinde IT2-FPD en düşük gürbüzlük değerini verir (ör. 12,1~m/s'de 0,110~m; PID 0,148, IT2-FLC 0,223~m), fakat takip hatası en yüksektir.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{ext_E1_scenarios.png}
+\caption{E1: sahnelere göre PID, makale IT2-FLC'si ve önerilen IT2-FPD.}
+\label{fig:e1}
+\end{figure*}
+
+Şekil~\ref{fig:traj} aynı tohumdaki örnek yörüngeleri göstermektedir: IT2-FPD hedefe daha az salınımla yaklaşmakta, ancak hızlı hedefte geride kalmaktadır.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{ext_example_trajectories.png}
+\caption{Aynı tohumda üç kontrolcünün örnek yörüngeleri (üstten görünüş).}
+\label{fig:traj}
+\end{figure}
+
+\subsection{Ablasyon deneyleri}
+\textbf{Tip-1 ve Tip-2 (E2).} FOU kaldırıldığında (Tip-1) makale kontrolcüsünün hiçbir sahnede anlamlı olarak değişmediği görülmüştür (ör. A sahnesinde yakalama süresi 24,35 ve 24,35~s). Tek girişli ve beş kurallı bir yapıda FOU, giriş--çıkış eğrisini çok az değiştirmektedir. IT2-FPD'de ise Tip-2, A sahnesinde yakalama süresini \%21 kısaltmış ($p<0{,}001$) ve yakalama oranını \%10'dan \%47'ye çıkarmıştır. Yani Tip-2'nin avantajı kural sayısı ve giriş boyutu arttığında ortaya çıkmaktadır; bu, Wu'nun~\cite{wu2012} IT2 kontrolcülerin eğriyi ``uyarlanabilir'' biçimde yumuşattığı bulgusuyla uyumludur.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{ext_E2_t1_vs_t2.png}
+\caption{E2: makale kontrolcüsü ve IT2-FPD için Tip-1 ile Tip-2 karşılaştırması.}
+\label{fig:e2}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{abl_E3_fou.png}
+\caption{E3: FOU genişliği $\delta$'ya göre performans (A+B+C).}
+\label{fig:e3}
+\end{figure*}
+
+\textbf{FOU genişliği (E3).} Makale kontrolcüsü $\delta=0$--$0{,}3$ aralığında neredeyse değişmemiştir (yakalama oranı \%84--87). IT2-FPD ise yalnızca küçük FOU'larda çalışmaktadır: $\delta=0{,}1$'de yakalama oranı \%81 iken $\delta=0{,}2$'de \%21, $\delta=0{,}3$'te \%4'e düşmüştür. Geniş FOU, türev girişinin etkisini bastırarak kontrolcüyü fazla yumuşatmaktadır.
+
+\textbf{Gürültü ve kaçırma (E4).} Piksel gürültüsü 40~px'e çıktığında makale IT2-FLC'si \%50 yakalama oranını korurken PID \%10'a, IT2-FPD \%3'e düşmüştür (Şekil~\ref{fig:e4}). Bu, IT2-FLC'nin gürültüye dayanıklılığına dair makalenin iddiasını desteklemektedir. Türev girişi gürültüyü büyüttüğü için IT2-FPD 20~px'ten itibaren hızla bozulmaktadır. Kaçırılan tespit oranı \%40'a çıktığında ise parçacık filtresi sayesinde hiçbir yöntem belirgin biçimde etkilenmemiştir.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{abl_E4_sigma.png}
+\caption{E4: piksel gürültüsüne göre performans (C sahnesi).}
+\label{fig:e4}
+\end{figure*}
+
+\textbf{Parçacık filtresi ve gecikme (E5).} Parçacık filtresi kapatılıp en son ham tespit kullanıldığında IT2-FPD'nin yakalama oranı \%100'den \%50'ye düşmüş, PID'inki \%97'den \%83'e inmiş, makale IT2-FLC'si ise \%93'te kalmıştır. Gecikme 0,1'den 0,3~s'ye çıktığında takip hatası PID'de \%13, IT2-FLC'de \%10, IT2-FPD'de \%6 artmıştır.
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.95\textwidth]{abl_E5_pf.png}
+\caption{E5: parçacık filtresi açık ve kapalı (C sahnesi).}
+\label{fig:e5}
+\end{figure*}
+
+\textbf{Tip indirgeme (E6).} Nie--Tan yöntemi, makale kontrolcüsünde KM ile aynı sonuçları vermiş (C sahnesinde yakalama süresi 9,41 ve 9,26~s, $p=0{,}88$), ancak adım başına süreyi 0,71'den 0,31~ms'ye indirmiştir. IT2-FPD'de de süre 1,01'den 0,52~ms'ye inmiştir. Tüm IT2 kontrolcüler 20~Hz'lik bir döngü için (50~ms) yeterince hızlıdır; PID ise 0,04~ms ile en hızlısıdır (Şekil~\ref{fig:e6}).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{abl_E6_compute_time.png}
+\caption{E6: kontrolcü başına adım süresi (KM, Nie--Tan, Tip-1, PID).}
+\label{fig:e6}
+\end{figure}
+
+%======================================================================
+\section{Tartışma (Discussion)}
+\textbf{Yeniden üretim başarılı mı?} Makalenin ana iddiası olan ``IT2-FLC PID'den daha hızlı yakalar ve daha az hata ile izler'' iddiası, PID'in aynı yöntemle adil biçimde ayarlandığı bir benzetimde, makalenin Tablo~3'üne göre hesaplanan büyüklükte yeniden üretilmiştir. Ancak etki her sahnede aynı değildir: kazancın çoğu gürültülü B sahnesinden gelmektedir. Makalenin özetteki \%20'lik iyileşmesi, özetteki PID değerinin aslında CNN satırına ait olması nedeniyle abartılı görünmektedir.
+
+\textbf{Önerilen yöntem neden daha iyi olmadı?} Türev girişi, hedefe yaklaşırken hatanın küçüldüğünü görüp komutu erken yumuşatmaktadır. Yavaş hedeflerde bu, aşmayı ve salınımı azaltır (daha düşük gürbüzlük indeksi, C sahnesinde \%100 yakalama). Fakat İHA'nın azami hızına yakın giden A sahnesindeki hedefte, İHA'nın hedefe yetişmek için sürekli tam hızla gitmesi gerekir; türev terimi bu durumda frenleme etkisi yaparak yakalamayı geciktirmektedir. Ek olarak türev, piksel gürültüsünü büyüttüğü için yüksek gürültüde ve parçacık filtresi olmadan performans hızla düşmektedir. Bu sonuç, klasik kontroldeki ``türev terimi gürültüye duyarlıdır'' bilgisiyle tutarlıdır. Bir PD yapısı yerine yalnızca büyük hatalarda devreye giren bir türev terimi ya da hedef hızını parçacık filtresinden alan ileri beslemeli bir yapı daha uygun olabilir.
+
+\textbf{Tip-2'nin değeri.} Makale kontrolcüsünde Tip-1 ve Tip-2 arasında anlamlı fark bulunmaması, FOU'nun makalede tanımlanmamış olmasıyla birlikte değerlendirildiğinde, makalenin sonucunun Tip-2'den çok bulanık yapının doğrusal olmayan kazancından kaynaklandığını düşündürmektedir. Tip-2'nin katkısı, iki girişli ve 25 kurallı yapıda belirgin hâle gelmiştir.
+
+\textbf{Hesaplama maliyeti.} KM yinelemeli olduğu için Nie--Tan'dan iki kat yavaştır, ama doğruluğa katkısı ölçülememiştir. Gömülü bir İHA bilgisayarında Nie--Tan tercih edilebilir.
+
+%======================================================================
+\section{Sınırlılıklar (Limitations)}
+\begin{itemize}
+\item Çalışma tamamen benzetimdir: düzlemsel İHA kinematiği, gerçek uçuş yok, gerçek bir görüntü işleme modeli yok.
+\item Rüzgâr modeli bir varsayımdır ($\alpha=0{,}04$); mutlak rüzgâr etkisi bu katsayıya bağlıdır.
+\item Makalede verilmeyen birçok parametre (FOU, çıkış ÜF'leri, $\Delta x$ ÜF'leri, PID kazançları, parçacık filtresi ayarları) bizim seçimimizdir; tamamı \texttt{docs/ASSUMPTIONS.md} dosyasında gerekçeleriyle listelenmiştir.
+\item Makalenin CNN, DQN ve MPC karşılaştırmaları yeniden üretilmemiştir.
+\item Ayar için rastgele arama kullanılmış ve bütçe 60 adayla sınırlandırılmıştır; daha büyük bir bütçe sonuçları değiştirebilir.
+\item Takip hatası yalnızca hedefi yakalayan denemeler üzerinden hesaplandığından, yakalama oranı düşük yöntemlerde (ör. A sahnesinde IT2-FPD) daha az sayıda denemeye dayanır.
+\end{itemize}
+
+%======================================================================
+\section{Sonuç (Conclusion)}
+Li vd.~\cite{li2024} tarafından önerilen IT2 bulanık mantık tabanlı İHA hedef takip yöntemi, açık varsayımlarla ve tek komutla yeniden çalıştırılabilen bir Python benzetiminde yeniden gerçekleştirilmiştir. IT2-FLC'nin PID'e göre yakalama süresini \%10,3, takip hatasını \%12,6 azalttığı ve bu üstünlüğün özellikle gürültülü ortamda belirgin olduğu gösterilmiştir. Makaledeki birkaç sayısal tutarsızlık raporlanmıştır. Önerilen türev girişli IT2-FPD takibi daha düzgün hâle getirmiş, ancak hızlı hedeflerde yakalamayı geciktirmiş ve gürültüye daha duyarlı olmuştur. Ablasyon deneyleri, Tip-2'nin avantajının çok girişli yapılarda ortaya çıktığını ve Nie--Tan tip indirgemesinin KM ile aynı doğrulukta yarı sürede çalıştığını göstermiştir. Gelecek çalışma olarak türev teriminin yalnızca büyük hatalarda devreye girdiği uyarlanabilir bir yapı, parçacık filtresinden alınan hedef hızıyla ileri besleme ve gerçek bir İHA üzerinde deneme önerilmektedir.
+
+%======================================================================
+\section*{Üretken Yapay Zekâ Kullanım Beyanı (Generative AI Usage Disclosure)}
+Bu çalışmada üretken yapay zekâ tabanlı bir kodlama asistanı; kodun yazımında, hata ayıklamada, belgelerin ve bu raporun taslağının hazırlanmasında ve kaynak künyelerinin kontrolünde yardımcı araç olarak kullanılmıştır. Tüm sayısal sonuçlar depodaki betiklerle üretilmiş, tüm kaynaklar DOI kayıtları üzerinden doğrulanmıştır. Yöntem seçimleri, sonuçların yorumu ve içeriğin doğruluğunun sorumluluğu yazara aittir.
+
+%======================================================================
+\begin{thebibliography}{99}
+\bibitem{li2024} C. Li, W. Zhao, L. Zhao, L. Ju, and H. Zhang, ``Application of fuzzy logic control theory combined with target tracking algorithm in unmanned aerial vehicle target tracking,'' \emph{Sci. Rep.}, vol.~14, Art. no.~18506, 2024, doi: 10.1038/s41598-024-58140-5.
+\bibitem{zadeh1965} L. A. Zadeh, ``Fuzzy sets,'' \emph{Inf. Control}, vol.~8, no.~3, pp.~338--353, 1965, doi: 10.1016/S0019-9958(65)90241-X.
+\bibitem{mamdani1975} E. H. Mamdani and S. Assilian, ``An experiment in linguistic synthesis with a fuzzy logic controller,'' \emph{Int. J. Man-Mach. Stud.}, vol.~7, no.~1, pp.~1--13, 1975, doi: 10.1016/S0020-7373(75)80002-2.
+\bibitem{macvicar1976} P. J. MacVicar-Whelan, ``Fuzzy sets for man-machine interaction,'' \emph{Int. J. Man-Mach. Stud.}, vol.~8, no.~6, pp.~687--697, 1976, doi: 10.1016/S0020-7373(76)80030-2.
+\bibitem{karnik1999} N. N. Karnik, J. M. Mendel, and Q. Liang, ``Type-2 fuzzy logic systems,'' \emph{IEEE Trans. Fuzzy Syst.}, vol.~7, no.~6, pp.~643--658, 1999, doi: 10.1109/91.811231.
+\bibitem{liang2000} Q. Liang and J. M. Mendel, ``Interval type-2 fuzzy logic systems: Theory and design,'' \emph{IEEE Trans. Fuzzy Syst.}, vol.~8, no.~5, pp.~535--550, 2000, doi: 10.1109/91.873577.
+\bibitem{karnik2001} N. N. Karnik and J. M. Mendel, ``Centroid of a type-2 fuzzy set,'' \emph{Inf. Sci.}, vol.~132, no.~1--4, pp.~195--220, 2001, doi: 10.1016/S0020-0255(01)00069-X.
+\bibitem{mendel2002} J. M. Mendel and R. I. B. John, ``Type-2 fuzzy sets made simple,'' \emph{IEEE Trans. Fuzzy Syst.}, vol.~10, no.~2, pp.~117--127, 2002, doi: 10.1109/91.995115.
+\bibitem{nie2008} M. Nie and W. W. Tan, ``Towards an efficient type-reduction method for interval type-2 fuzzy logic systems,'' in \emph{Proc. IEEE Int. Conf. Fuzzy Syst.}, 2008, pp.~1425--1432, doi: 10.1109/FUZZY.2008.4630559.
+\bibitem{wu2009} D. Wu and J. M. Mendel, ``Enhanced Karnik--Mendel algorithms,'' \emph{IEEE Trans. Fuzzy Syst.}, vol.~17, no.~4, pp.~923--934, 2009, doi: 10.1109/TFUZZ.2008.924329.
+\bibitem{wu2012} D. Wu, ``On the fundamental differences between interval type-2 and type-1 fuzzy logic controllers,'' \emph{IEEE Trans. Fuzzy Syst.}, vol.~20, no.~5, pp.~832--848, 2012, doi: 10.1109/TFUZZ.2012.2186818.
+\bibitem{hagras2004} H. A. Hagras, ``A hierarchical type-2 fuzzy logic control architecture for autonomous mobile robots,'' \emph{IEEE Trans. Fuzzy Syst.}, vol.~12, no.~4, pp.~524--539, 2004, doi: 10.1109/TFUZZ.2004.832538.
+\bibitem{kumbasar2014} T. Kumbasar and H. Hagras, ``Big Bang--Big Crunch optimization based interval type-2 fuzzy PID cascade controller design strategy,'' \emph{Inf. Sci.}, vol.~282, pp.~277--295, 2014, doi: 10.1016/j.ins.2014.06.005.
+\bibitem{sarabakha2018} A. Sarabakha, C. Fu, E. Kayacan, and T. Kumbasar, ``Type-2 fuzzy logic controllers made even simpler: From design to deployment for UAVs,'' \emph{IEEE Trans. Ind. Electron.}, vol.~65, no.~6, pp.~5069--5077, 2018, doi: 10.1109/TIE.2017.2767546.
+\bibitem{harik2017} E. H. C. Harik, F. Guérin, F. Guinand, J.-F. Brethé, H. Pelvillain, and J.-Y. Parédé, ``Fuzzy logic controller for predictive vision-based target tracking with an unmanned aerial vehicle,'' \emph{Adv. Robot.}, vol.~31, no.~7, pp.~368--381, 2017, doi: 10.1080/01691864.2016.1271500.
+\bibitem{zatout2022} M. S. Zatout, A. Rezoug, A. Rezoug, K. Baizid, and J. Iqbal, ``Optimisation of fuzzy logic quadrotor attitude controller -- particle swarm, cuckoo search and BAT algorithms,'' \emph{Int. J. Syst. Sci.}, vol.~53, no.~4, pp.~883--908, 2022, doi: 10.1080/00207721.2021.1978012.
+\bibitem{dekoning2023} C. de Koning and A. Jamshidnejad, ``Hierarchical integration of model predictive and fuzzy logic control for combined coverage and target-oriented search-and-rescue via robots with imperfect sensors,'' \emph{J. Intell. Robot. Syst.}, vol.~107, no.~3, Art. no.~40, 2023, doi: 10.1007/s10846-023-01833-2.
+\bibitem{tsitses2024} I. Tsitses, P. Zacharia, E. Xidias, and M. Papoutsidakis, ``A fuzzy-based system for autonomous unmanned aerial vehicle ship deck landing,'' \emph{Sensors}, vol.~24, no.~2, Art. no.~680, 2024, doi: 10.3390/s24020680.
+\bibitem{gordon1993} N. J. Gordon, D. J. Salmond, and A. F. M. Smith, ``Novel approach to nonlinear/non-Gaussian Bayesian state estimation,'' \emph{IEE Proc. F Radar Signal Process.}, vol.~140, no.~2, pp.~107--113, 1993, doi: 10.1049/ip-f-2.1993.0015.
+\bibitem{arulampalam2002} M. S. Arulampalam, S. Maskell, N. Gordon, and T. Clapp, ``A tutorial on particle filters for online nonlinear/non-Gaussian Bayesian tracking,'' \emph{IEEE Trans. Signal Process.}, vol.~50, no.~2, pp.~174--188, 2002, doi: 10.1109/78.978374.
+\bibitem{chaumette2006} F. Chaumette and S. Hutchinson, ``Visual servo control. I. Basic approaches,'' \emph{IEEE Robot. Autom. Mag.}, vol.~13, no.~4, pp.~82--90, 2006, doi: 10.1109/MRA.2006.250573.
+\bibitem{dosovitskiy2021} A. Dosovitskiy \emph{et al.}, ``An image is worth 16$\times$16 words: Transformers for image recognition at scale,'' in \emph{Proc. Int. Conf. Learn. Represent. (ICLR)}, 2021. [Online]. Available: \url{https://arxiv.org/abs/2010.11929}
+\bibitem{nishad2025} D. K. Nishad, S. Khalid, D. Prakash, V. K. Singh, and P. Sahani, ``Advanced algorithms for UAV tracking of targets exhibiting start-stop and irregular motion,'' \emph{Sci. Rep.}, vol.~15, 2025, doi: 10.1038/s41598-025-13698-6.
+\end{thebibliography}
+
+\end{document}

@@ -19,6 +19,12 @@ results/raw/*
 # --- Reference paper PDF (copyrighted; link is in references/README.md) ---
 references/*.pdf
 
+# --- LaTeX build files (report/report.tex -> report/report.pdf) ---
+*.aux
+*.log
+*.out
+*.synctex.gz
+
 # --- OS / editor ---
 .DS_Store
 Thumbs.db
